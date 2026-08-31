@@ -1,0 +1,116 @@
+# The TypeScript heavy tier: weekly and on demand, never a required context.
+#
+# Mirrors rust-heavy.yml where the concern transfers and diverges where it
+# does not:
+#
+#   cross-platform  ->  same. Path handling is where a Node tool breaks on
+#                       Windows, and nothing else compiles it there.
+#   msrv            ->  node-matrix. The oldest supported runtime rather than
+#                       the oldest compiler.
+#   cargo-audit     ->  no counterpart. npm audit already runs in the fast
+#                       tier and there is no second advisory database worth
+#                       a redundant pass.
+#   docs            ->  no counterpart yet. Add it when there is API surface
+#                       worth documenting.
+#   coverage        ->  same, measured and published, never gated.
+
+name: TypeScript heavy
+
+on:
+  workflow_call:
+    inputs:
+      node-versions:
+        description: "JSON array of Node versions to prove, oldest first."
+        required: false
+        default: '["22", "24"]'
+        type: string
+      working-directory:
+        required: false
+        default: "."
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  node-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ${{ fromJSON(inputs.node-versions) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
+        with:
+          tool: similarity-ts
+      - working-directory: ${{ inputs.working-directory }}
+        run: npm ci
+      - working-directory: ${{ inputs.working-directory }}
+        run: node --test
+
+  # Path separators, case sensitivity and line endings are where a Node tool
+  # that only ever ran on Linux breaks.
+  cross-platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
+        with:
+          tool: similarity-ts
+      - working-directory: ${{ inputs.working-directory }}
+        run: npm ci
+      - working-directory: ${{ inputs.working-directory }}
+        run: node --test
+
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
+        with:
+          tool: similarity-ts
+      - working-directory: ${{ inputs.working-directory }}
+        run: npm ci
+      - working-directory: ${{ inputs.working-directory }}
+        run: node --test --experimental-test-coverage | tee coverage.txt
+      # Through the environment, never interpolated into the shell text: an
+      # expression expanded into `run:` is a template-injection vector.
+      - name: Publish the summary
+        if: always()
+        env:
+          WORKDIR: ${{ inputs.working-directory }}
+        run: |
+          {
+            echo "## TypeScript coverage"
+            echo
+            echo '```text'
+            tail -30 "$WORKDIR/coverage.txt" 2>/dev/null || echo "(none)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
