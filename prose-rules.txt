@@ -10,6 +10,9 @@
 # repository that must stay sink-agnostic in its source as well can add a
 # stricter local rule -- maestro-core does.
 #
+# config/ is exempt for the same reason: it is captured third-party state, and
+# an inventory that will not name what it inventories is not an inventory.
+#
 # This lives here rather than in one repository because the leak it exists to
 # stop happened exactly that way: maestro-core carried the rule, maestro-pi-config
 # named a sink implementation in its README, its architecture diagram and its
