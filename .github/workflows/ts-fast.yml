@@ -7,8 +7,14 @@
 #   rust-format  ->  ts-format   biome format
 #   rust-lint    ->  ts-lint     biome lint
 #   (none)       ->  ts-types    tsc --noEmit
-#   rust-test    ->  ts-test     node --test, plus the duplication gate
+#   rust-test    ->  ts-test     vitest, plus the duplication gate
 #   rust-audit   ->  ts-audit    npm audit, plus unused-dependency detection
+#   (Cargo)      ->  ts-arch     dependency-cruiser
+#
+# ts-arch closes a gap this file used to record as open. Any TypeScript module
+# can import any other, so a layering rule is a comment until something fails
+# the build over it -- the same reason Python runs import-linter. Rust gets
+# the property from Cargo without a job.
 #
 # ts-types has no Rust counterpart because rustc is not optional. In
 # TypeScript the type check is a separate tool that can be skipped, which is
@@ -102,8 +108,12 @@ jobs:
       # similarity-ts is installed because one of these tests shells out to
       # it -- the same copy-paste gate as Rust, from the same author's tool,
       # and an allowlist rather than a threshold for the same reason.
+      #
+      # vitest rather than node --test: it reports branch coverage, which is
+      # what makes a coverage floor a real guarantee instead of a line count
+      # that ignores untaken branches.
       - working-directory: ${{ inputs.working-directory }}
-        run: node --test
+        run: npx vitest run
 
   ts-audit:
     runs-on: ubuntu-latest
@@ -123,3 +133,19 @@ jobs:
       # the same reason cargo-machete sits in rust-audit.
       - working-directory: ${{ inputs.working-directory }}
         run: npx knip --no-exit-code --reporter compact
+
+  # Architecture as a gate rather than a diagram, matching py-arch.
+  ts-arch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+      - working-directory: ${{ inputs.working-directory }}
+        run: npm ci
+      - working-directory: ${{ inputs.working-directory }}
+        run: npx depcruise --config .dependency-cruiser.js src

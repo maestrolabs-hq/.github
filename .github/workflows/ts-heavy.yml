@@ -13,7 +13,12 @@
 #                       vulnerability is public in both.
 #   docs            ->  no counterpart yet. Add it when there is API surface
 #                       worth documenting.
-#   coverage        ->  same, measured and published, never gated.
+#   coverage        ->  gated, unlike Rust. vitest with the istanbul provider
+#                       reports branch coverage, so a floor is a real
+#                       guarantee rather than a line count that ignores
+#                       untaken branches.
+#   (none)          ->  mutation. Stryker, reported not gated, for the same
+#                       reason as cargo-mutants.
 
 name: TypeScript heavy
 
@@ -58,7 +63,7 @@ jobs:
       - working-directory: ${{ inputs.working-directory }}
         run: npm ci
       - working-directory: ${{ inputs.working-directory }}
-        run: node --test
+        run: npx vitest run
 
   # Path separators, case sensitivity and line endings are where a Node tool
   # that only ever ran on Linux breaks.
@@ -82,7 +87,7 @@ jobs:
       - working-directory: ${{ inputs.working-directory }}
         run: npm ci
       - working-directory: ${{ inputs.working-directory }}
-        run: node --test
+        run: npx vitest run
 
   # Deliberately redundant with `npm audit` in the fast tier. npm audit reads
   # GitHub's advisory database; OSV is a separate one, and the cheap time to
@@ -117,7 +122,7 @@ jobs:
       - working-directory: ${{ inputs.working-directory }}
         run: npm ci
       - working-directory: ${{ inputs.working-directory }}
-        run: node --test --experimental-test-coverage | tee coverage.txt
+        run: npx vitest run --coverage | tee coverage.txt
       # Through the environment, never interpolated into the shell text: an
       # expression expanded into `run:` is a template-injection vector.
       - name: Publish the summary
@@ -132,3 +137,18 @@ jobs:
             tail -30 "$WORKDIR/coverage.txt" 2>/dev/null || echo "(none)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - working-directory: ${{ inputs.working-directory }}
+        run: npm ci
+      - working-directory: ${{ inputs.working-directory }}
+        run: npx stryker run --reporters clear-text,progress

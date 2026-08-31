@@ -95,6 +95,36 @@ jobs:
           RUSTDOCFLAGS: -D warnings
         run: cargo doc --no-deps --all-features
 
+  # Coverage says a line ran. Mutation says a bug on that line would have
+  # failed something. It is the only check that tests the tests, which is the
+  # estate's own rule -- a gate that cannot fail is not a gate -- turned on
+  # the test suite itself.
+  #
+  # Reported, not gated. A mutation score needs a baseline before a floor
+  # under it means anything, and a floor picked today would be a number
+  # someone invented rather than a bar the suite has cleared.
+  mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
+        with:
+          tool: cargo-mutants,similarity-rs
+      - run: cargo mutants --no-shuffle --timeout 120 | tee mutants.txt || true
+      - name: Publish the score
+        if: always()
+        run: |
+          {
+            echo "## Mutation"
+            echo
+            echo '```text'
+            tail -20 mutants.txt 2>/dev/null || echo "(none)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # Measured, published, not gated. A line-coverage floor on a toolchain that
   # reports no branch data would claim a guarantee it cannot make.
   coverage:

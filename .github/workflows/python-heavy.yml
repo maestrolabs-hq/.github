@@ -14,6 +14,8 @@
 #   coverage            ->  no separate job. Unlike Rust, the floor is already
 #                           enforced in the fast tier, with branch coverage,
 #                           so a heavy report would repeat a settled answer.
+#   (none)              ->  mutation. mutmut, reported not gated: the same
+#                           check the other two run, for the same reason.
 #   docs                ->  no separate job. Docstrings are checked by ruff's
 #                           D and DOC rules in py-lint, against the code they
 #                           describe.
@@ -107,3 +109,26 @@ jobs:
         with:
           tool: osv-scanner
       - run: osv-scanner scan source --recursive .
+
+  mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ inputs.uv-version }}
+      - run: uv sync --locked
+      - run: uv run --with mutmut mutmut run --max-children 4 | tee mutants.txt || true
+      - name: Publish the score
+        if: always()
+        run: |
+          {
+            echo "## Mutation"
+            echo
+            echo '```text'
+            tail -20 mutants.txt 2>/dev/null || echo "(none)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
