@@ -1,0 +1,133 @@
+# The heavy tier: weekly and on demand.
+#
+# These are evidence checks, never required ruleset contexts. Blocking a merge
+# on a thirty-minute matrix is how a team learns to bypass its own gates. What
+# matters instead is freshness: a heavy result older than eight days is not
+# evidence of anything, and the fast tier does not cover what these do.
+#
+# Deliberately absent, with reasons, so the gaps are decisions rather than
+# oversights:
+#
+#   Semgrep       Python-based, which this estate avoids, and its Rust rule
+#                 coverage is thin next to clippy pedantic plus CodeQL, which
+#                 now analyses Rust.
+#   Scheduled     CodeQL default setup already runs on its own weekly
+#   CodeQL        schedule. A second one would duplicate, not verify.
+
+name: Rust heavy
+
+on:
+  workflow_call:
+    inputs:
+      msrv:
+        description: "Oldest Rust the crate claims to support."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  # The only place the cfg(not(unix)) branches are ever compiled. On Linux they
+  # are invisible to every gate, so a typo there would ship undetected.
+  cross-platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: cargo build --all-targets
+      - run: cargo test --all-targets
+
+  # rust-toolchain.toml pins one version, so nothing else ever proves the crate
+  # still builds on the oldest version it claims.
+  msrv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - env:
+          MSRV: ${{ inputs.msrv }}
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$MSRV" --profile minimal --no-self-update
+          cargo "+$MSRV" check --all-targets
+
+  # Redundant with cargo-deny in the fast tier, on purpose: two advisory
+  # sources disagree before a vulnerability is public, and the cheap time to
+  # find that out is weekly rather than during an incident.
+  cargo-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
+        with:
+          tool: cargo-audit
+      - run: cargo audit --deny warnings
+
+  # Broken intra-doc links compile fine and rot silently.
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --no-deps --all-features
+
+  # Measured, published, not gated. A line-coverage floor on a toolchain that
+  # reports no branch data would claim a guarantee it cannot make.
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
+        with:
+          tool: cargo-llvm-cov,similarity-rs
+      - run: cargo llvm-cov --all-targets --summary-only | tee coverage.txt
+      - name: Publish the summary
+        if: always()
+        run: |
+          {
+            echo "## Coverage"
+            echo
+            echo '```text'
+            cat coverage.txt 2>/dev/null || echo "(none)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # The repository's own supply-chain hygiene, scored publicly.
+  scorecard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: scorecard.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: github/codeql-action/upload-sarif@486fec2a3ea2626afcd8c7e9208b4f515078dd7e # codeql-bundle-v2.26.4
+        with:
+          sarif_file: scorecard.sarif
