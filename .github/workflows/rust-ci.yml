@@ -1,0 +1,110 @@
+# The gates, in one place.
+#
+# Three repositories ran identical copies of this, which meant three copies of
+# every pinned SHA. A pin that rots in one place and not the others is exactly
+# the drift the estate is supposed to refuse.
+#
+# What stays in the caller is what legitimately differs: which duplication test
+# to run, and whether the repository has TypeScript to lint.
+
+name: Rust CI
+
+on:
+  workflow_call:
+    inputs:
+      duplication-test:
+        description: "Name of the `cargo test --test <name>` carrying the copy-paste gate."
+        required: true
+        type: string
+      node:
+        description: "Also run the Biome gates. Only for repositories holding TypeScript or JSON we own."
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # rust-toolchain.toml pins the version; rustup honours it on first use.
+      - run: rustup show active-toolchain
+      - uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
+        with:
+          tool: cargo-deny,cargo-machete,similarity-rs
+      - run: cargo fmt --all --check
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: cargo test --all-targets
+      - run: cargo machete
+      - run: cargo deny check
+      # Through the environment, not interpolated into the shell text: an
+      # expression expanded into `run:` is a template-injection vector, and
+      # zizmor rejected the first version of this line.
+      - env:
+          DUPLICATION_TEST: ${{ inputs.duplication-test }}
+        run: cargo test --test "$DUPLICATION_TEST"
+      - if: inputs.node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - if: inputs.node
+        run: npm ci
+      - if: inputs.node
+        run: npx biome format .
+      - if: inputs.node
+        run: npx biome lint .
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
+          comment-summary-in-pr: never
+
+  # Full history, not the diff: a secret committed and later removed is still
+  # published.
+  secrets-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # gitleaks is not in install-action's manifest, so it is fetched directly
+      # and checksum-verified before it runs.
+      - name: Install gitleaks
+        env:
+          VERSION: "8.30.1"
+          SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+        run: |
+          set -euo pipefail
+          url="https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz"
+          curl -fsSL "$url" -o gitleaks.tar.gz
+          echo "$SHA256  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+          sudo install -m755 gitleaks /usr/local/bin/gitleaks
+      - run: gitleaks git --no-banner --redact --verbose .
+
+  # The workflows are code with access to the repository, so they are audited
+  # too: unpinned actions, excessive permissions, injectable expressions.
+  actions-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
+        with:
+          tool: zizmor@1.30.0
+      - run: zizmor --persona=regular .github/workflows
