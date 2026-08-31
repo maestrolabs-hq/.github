@@ -7,9 +7,9 @@ every push and every pull request. Its blast radius is the estate.
 
 ---
 
-## P0 -- the repository everything executes is the one nothing guards
+## ~~P0~~ FIXED -- the repository everything executes was the one nothing guarded
 
-### 1. No CI runs here
+### 1. ~~No CI runs here~~ FIXED
 
 All ten workflows are `on: workflow_call` only. There is no caller. So the
 repository whose `main` becomes arbitrary code in every sibling's CI is the
@@ -32,7 +32,7 @@ for arbitrary artefacts.
 pull_request. Add a repository ruleset on `main` naming those contexts as
 required. This is the single highest-leverage change in the estate.
 
-### 2. Dependabot is excluded from the repo holding every action pin
+### 2. ~~Dependabot is excluded from the repo holding every action pin~~ FIXED
 
 `maestro-governance/baseline.txt` scopes `dependabot.yml` to three repos. This
 one is not among them, and has no such file.
