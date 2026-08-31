@@ -1,0 +1,139 @@
+# Release: cut the version, build it, describe it, prove it came from here.
+#
+# Two jobs, deliberately separate. release-please owns the version and the
+# changelog; nothing else touches them. release-assets runs only when a release
+# was actually created, builds the artefacts, and publishes them onto a release
+# that stays a draft until every asset is in place -- so a consumer never sees
+# a release that is half-populated.
+#
+# The token matters. release-please pushes with a GitHub App token rather than
+# the default GITHUB_TOKEN, because GitHub raises no workflow run from a push
+# made by the default token: the required checks would never report and every
+# release pull request would sit unmergeable forever.
+
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      binary:
+        description: "Name of the binary cargo builds, when the crate ships one."
+        required: false
+        default: ""
+        type: string
+    secrets:
+      RELEASE_APP_ID:
+        required: true
+      RELEASE_APP_PRIVATE_KEY:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      released: ${{ steps.rp.outputs.release_created }}
+      tag: ${{ steps.rp.outputs.tag_name }}
+    steps:
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: token
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          # An App token otherwise carries every permission the installation
+          # has. release-please needs exactly two: a branch and a tag, and a
+          # pull request to put them behind.
+          permission-contents: write
+          permission-pull-requests: write
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: rp
+        with:
+          token: ${{ steps.token.outputs.token }}
+          config-file: .github/release-please/config.json
+          manifest-file: .github/release-please/manifest.json
+
+  release-assets:
+    needs: release-please
+    if: needs.release-please.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write      # upload assets, publish the release
+      id-token: write      # OIDC, for the provenance attestation
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
+        with:
+          tool: cargo-cyclonedx
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cargo build --release --locked
+          if [ -n "${BINARY}" ] && [ -f "target/release/${BINARY}" ]; then
+            cp "target/release/${BINARY}" "dist/${BINARY}-x86_64-unknown-linux-gnu"
+          fi
+        env:
+          BINARY: ${{ inputs.binary }}
+
+      # Two SBOMs, from two sources, on purpose. CycloneDX is generated from the
+      # locked resolution, so it describes exactly what was compiled. SPDX comes
+      # from GitHub's own dependency graph, so it describes what GitHub believes
+      # is here. They should agree, and a consumer can check that they do.
+      - name: CycloneDX SBOM, from the lockfile
+        run: |
+          set -euo pipefail
+          cargo cyclonedx --format json --all
+          find . -name '*.cdx.json' -not -path './dist/*' -exec cp {} dist/sbom.cdx.json \; -quit
+
+      - name: SPDX SBOM, from the dependency graph
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: gh api "repos/$REPO/dependency-graph/sbom" --jq .sbom > dist/sbom.spdx.json
+
+      # Everything a consumer might download, hashed in one file that is itself
+      # an attested subject -- so an asset added later cannot pass unnoticed.
+      - name: SHA-256 checksums
+        run: |
+          set -euo pipefail
+          cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        id: attest
+        with:
+          subject-path: dist/*
+
+      # Scorecard's Signed-Releases probe recognises provenance only by the
+      # asset-name suffix `.intoto.jsonl`. The action writes it elsewhere under
+      # a different name, so it is copied in under one that is discoverable.
+      #
+      # This MUST run after the attestation: a file sitting in dist/ while
+      # `subject-path: dist/*` is evaluated becomes a stray attested subject,
+      # and it is deliberately absent from SHA256SUMS, which is itself attested.
+      - name: Ship the provenance bundle under a discoverable name
+        env:
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+          TAG: ${{ needs.release-please.outputs.tag }}
+        run: cp "$BUNDLE" "dist/${TAG}.intoto.jsonl"
+
+      - name: Upload the assets to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-please.outputs.tag }}
+        run: gh release upload "$TAG" dist/* --clobber
+
+      # Published last, with every asset already in place: a release is
+      # immutable once out, so a consumer never sees a partial one.
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-please.outputs.tag }}
+        run: gh release edit "$TAG" --draft=false
