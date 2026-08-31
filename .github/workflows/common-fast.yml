@@ -92,6 +92,54 @@ jobs:
           if [ "$status" -eq 0 ]; then echo "No banned wording."; fi
           exit "$status"
 
+  # Every file says what it is for, in the first thing you read.
+  #
+  # A reader arriving cold gets the reason the file exists before its first
+  # line of content. Rust uses //!, everything else uses a leading comment.
+  #
+  # Not `missing_docs`: that wants a line above every public field, which
+  # produces "/// The key." over `key: String` and teaches people that doc
+  # comments are a tax. The brief is where the reasoning goes.
+  #
+  # Language-agnostic, so it lives here rather than in rust-fast. Cargo.toml
+  # and rust-toolchain.toml were the files that proved the point: both sat
+  # beside clippy.toml and deny.toml, which had briefs, and neither did --
+  # because the gate that existed only read .rs.
+  brief:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Every file opens with a brief
+        run: |
+          set -uo pipefail
+          bare=$(git ls-files \
+              '*.rs' '*.toml' '*.sh' 'justfile' '*.just' \
+              '.github/workflows/*.yml' '.github/ISSUE_TEMPLATE/*.yml' \
+            | while read -r f; do
+              [ -f "$f" ] || continue
+              case "$f" in
+                # Captured third-party state and generated manifests are not
+                # ours to annotate.
+                config/*|*.lock) continue ;;
+              esac
+              case "$f" in
+                *.rs) grep -qE '^//!' "$f" || echo "$f" ;;
+                *)    awk 'NF{print;exit}' "$f" | grep -qE '^[[:space:]]*#' || echo "$f" ;;
+              esac
+            done)
+          if [ -n "$bare" ]; then
+            echo "::error::these files do not say what they are for"
+            printf '%s\n' "$bare" | sed 's|^|    |'
+            echo
+            echo "Open each with a comment: what it does, and why it exists."
+            echo "Rust uses //! ; everything else uses #."
+            exit 1
+          fi
+          echo "Every file explains itself."
+
   # The workflows are code with access to the repository, so they are audited
   # too: unpinned actions, excessive permissions, injectable expressions.
   actions-security:

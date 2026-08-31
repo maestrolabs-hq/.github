@@ -1,3 +1,8 @@
+# A proposed check, or a report that an existing one is wrong.
+#
+# Issue forms are org-wide: this file is inherited by every repository
+# that does not define its own, including ones that do not exist yet.
+
 name: A gate is wrong
 description: A check failed on correct code, or passed on incorrect code.
 labels: [gate]
