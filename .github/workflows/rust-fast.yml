@@ -44,6 +44,41 @@ jobs:
           persist-credentials: false
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
+  # Every file says what it is for, in the first thing you read.
+  #
+  # A reader arriving at a file cold gets the reason it exists before the
+  # first `use`. That is what //! is for, and rustdoc renders it as the
+  # module's front page -- so the brief is not an extra artefact to maintain,
+  # it is the documentation.
+  #
+  # Not `missing_docs`: that demands a line on every public field and variant,
+  # which produces "The key." above `key: String` and teaches people that doc
+  # comments are a tax. The brief is where the thinking goes.
+  rust-docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Every module opens with a brief
+        run: |
+          set -uo pipefail
+          missing=$(git ls-files '*.rs' | while read -r f; do
+            # Skip the licence/lint preamble some crates carry, then require
+            # //! before any item. `head` alone would miss a file that opens
+            # with #![allow(...)].
+            grep -qE '^//!' "$f" || echo "$f"
+          done)
+          if [ -n "$missing" ]; then
+            echo "::error::these files do not say what they are for"
+            printf '%s\n' "$missing" | sed 's|^|    |'
+            echo
+            echo "Open each with //! -- what it does, and why it exists."
+            exit 1
+          fi
+          echo "Every module explains itself."
+
   rust-test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
