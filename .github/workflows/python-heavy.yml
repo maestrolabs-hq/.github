@@ -1,0 +1,109 @@
+# The Python heavy tier: weekly and on demand, never a required context.
+#
+# Mirrors the other languages where the concern transfers:
+#
+#   msrv / node-matrix  ->  python-matrix. The oldest interpreter the project
+#                           claims, plus the newest, because a project that
+#                           orchestrates other repositories cannot refuse to
+#                           run under the interpreter they already use.
+#   cargo-audit         ->  uv-audit. pip-audit in the fast tier reads the
+#   osv-scan                PyPI advisory data; uv resolves and reports
+#                           independently. Two sources, same reason as
+#                           everywhere else.
+#   cross-platform      ->  same.
+#   coverage            ->  no separate job. Unlike Rust, the floor is already
+#                           enforced in the fast tier, with branch coverage,
+#                           so a heavy report would repeat a settled answer.
+#   docs                ->  no separate job. Docstrings are checked by ruff's
+#                           D and DOC rules in py-lint, against the code they
+#                           describe.
+
+name: Python heavy
+
+on:
+  workflow_call:
+    inputs:
+      python-versions:
+        description: "JSON array of interpreters to prove, oldest first."
+        required: false
+        default: '["3.12", "3.13"]'
+        type: string
+      uv-version:
+        required: false
+        default: "0.11.19"
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  python-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ${{ fromJSON(inputs.python-versions) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ inputs.uv-version }}
+      - env:
+          PY: ${{ matrix.python }}
+        run: |
+          set -euo pipefail
+          uv python install "$PY"
+          uv sync --locked --python "$PY"
+          uv run --python "$PY" pytest -q
+
+  cross-platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ inputs.uv-version }}
+      - run: uv sync --locked
+      - run: uv run pytest -q
+
+  # Deliberately redundant with pip-audit in the fast tier.
+  uv-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ inputs.uv-version }}
+      - run: uv sync --locked
+      - run: uv audit
+
+  # A third database again, and the only one that reads the lockfile directly
+  # rather than a resolved requirements list.
+  osv-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
+        with:
+          tool: osv-scanner
+      - run: osv-scanner scan source --recursive .
