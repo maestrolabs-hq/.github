@@ -1,0 +1,135 @@
+# The Python fast tier. One job per concern, like Rust and TypeScript.
+#
+# The inherited baseline ran format, lint, both type checkers, tests, unused
+# dependencies and the architecture contracts inside a single context called
+# `quality`. That context could say a repository was broken and nothing more,
+# and no check in it could be adopted or retired on its own.
+#
+# Python needs one job the others do not:
+#
+#   py-arch   Any Python module can import any other, so a layering rule is a
+#             sentence in a README until something fails the build over it.
+#             Rust gets this from Cargo -- a crate cannot reference a crate
+#             absent from its dependencies -- and TypeScript does not have it
+#             at all yet.
+#
+# And one concern the others express differently:
+#
+#   py-types  Two checkers, deliberately. They disagree usefully: `ty` parses
+#             past a syntax error where mypy stops at the first one.
+
+name: Python fast
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        required: false
+        default: "3.12"
+        type: string
+      uv-version:
+        required: false
+        default: "0.11.19"
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  py-format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ inputs.uv-version }}
+      - run: uv sync --locked
+      - run: uv run ruff format --check .
+
+  py-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ inputs.uv-version }}
+      - run: uv sync --locked
+      - run: uv run ruff check .
+
+  # Two checkers on purpose. A second opinion on types is worth as much as a
+  # second advisory database, and for the same reason: they disagree before
+  # the disagreement matters.
+  py-types:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ inputs.uv-version }}
+      - run: uv sync --locked
+      - run: uv run ty check --error-on-warning
+      - run: uv run mypy
+
+  # Architecture as a gate rather than a diagram. import-linter fails the
+  # build when a module reaches across a layer it is not allowed to touch.
+  py-arch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ inputs.uv-version }}
+      - run: uv sync --locked
+      - run: uv run lint-imports
+
+  # The coverage floor lives in pyproject's addopts and is enforced here.
+  # Unlike Rust, this toolchain reports branch coverage, so the floor is a
+  # real guarantee rather than a line-count that ignores untaken branches.
+  py-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ inputs.uv-version }}
+      - run: uv sync --locked
+      - run: uv run pytest -q
+
+  py-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ inputs.uv-version }}
+      - run: uv sync --locked
+      # An undeclared import or a declared-but-unused dependency: both make
+      # the manifest a wish list rather than a description.
+      - run: uv run deptry src
+      - name: Advisories against the locked set
+        run: |
+          set -euo pipefail
+          uv export --locked --no-emit-project --format requirements-txt --output-file requirements-audit.txt > /dev/null
+          uvx --from pip-audit==2.10.1 pip-audit --no-deps -r requirements-audit.txt
