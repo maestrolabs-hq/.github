@@ -1,0 +1,26 @@
+# Words this organisation does not use, and what to write instead.
+#
+# One rule per line: <term> <TAB> <reason and replacement>.
+# Matching is whole-word and case-insensitive. Comments and blanks ignored.
+#
+# This lives here rather than in one repository because the leak it exists to
+# stop happened exactly that way: maestro-core carried the rule, maestro-pi-config
+# named a sink implementation in its README, its architecture diagram and its
+# glossary, and nothing looked.
+
+# ── Sink implementations ──────────────────────────────────────────────────
+# A sink you can name in the engine is a sink you cannot swap. Say "sink",
+# "consumer", or "the memory consumer".
+mempalace	a sink implementation; say "sink" or "the memory consumer"
+codegraphcontext	a sink implementation; say "sink" or "the graph consumer"
+graphify	a sink implementation; say "sink" or "the graph consumer"
+
+# ── A sink's internal vocabulary ──────────────────────────────────────────
+# Borrowing how a sink files things couples us to that sink's model. The
+# estate's word for the unit recall is bounded by is "scope".
+wing	a sink's storage vocabulary; say "scope"
+drawer	a sink's storage vocabulary; say "scope"
+
+# ── Wording a decision retired ────────────────────────────────────────────
+# Recorded so it cannot quietly return.
+spawn-per-event	superseded by the resident supervisor design
