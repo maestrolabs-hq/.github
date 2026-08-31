@@ -1,3 +1,8 @@
+# Something in the estate behaves differently from what it says it does.
+#
+# Issue forms are org-wide: this file is inherited by every repository
+# that does not define its own, including ones that do not exist yet.
+
 name: Bug
 description: Something behaves differently from what it says it does.
 labels: [bug]

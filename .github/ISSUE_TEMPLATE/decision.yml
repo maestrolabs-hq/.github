@@ -1,3 +1,8 @@
+# A choice worth recording, so the reasoning outlives the people who had it.
+#
+# Issue forms are org-wide: this file is inherited by every repository
+# that does not define its own, including ones that do not exist yet.
+
 name: Reopen a decision
 description: An ADR is wrong, or the ground it stood on has moved.
 labels: [decision]
