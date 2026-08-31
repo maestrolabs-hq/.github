@@ -7,9 +7,10 @@
 #                       Windows, and nothing else compiles it there.
 #   msrv            ->  node-matrix. The oldest supported runtime rather than
 #                       the oldest compiler.
-#   cargo-audit     ->  no counterpart. npm audit already runs in the fast
-#                       tier and there is no second advisory database worth
-#                       a redundant pass.
+#   cargo-audit     ->  osv-scanner. npm audit reads GitHub's advisory
+#                       database; OSV is a different one, and the point of a
+#                       redundant pass is that two sources disagree before a
+#                       vulnerability is public in both.
 #   docs            ->  no counterpart yet. Add it when there is API surface
 #                       worth documenting.
 #   coverage        ->  same, measured and published, never gated.
@@ -82,6 +83,23 @@ jobs:
         run: npm ci
       - working-directory: ${{ inputs.working-directory }}
         run: node --test
+
+  # Deliberately redundant with `npm audit` in the fast tier. npm audit reads
+  # GitHub's advisory database; OSV is a separate one, and the cheap time to
+  # discover they disagree is weekly rather than during an incident. This is
+  # the counterpart to cargo-audit in rust-heavy.yml.
+  osv-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
+        with:
+          tool: osv-scanner
+      - working-directory: ${{ inputs.working-directory }}
+        run: osv-scanner scan source --recursive .
 
   coverage:
     runs-on: ubuntu-latest
