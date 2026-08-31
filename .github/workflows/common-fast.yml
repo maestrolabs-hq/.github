@@ -73,12 +73,16 @@ jobs:
             case "$term" in ''|\#*) continue ;; esac
             # Whole word, case-insensitive, tracked files only, and never the
             # rules file itself or the checkout it came from.
-            # Prose only. Code that builds ~/.some-tool/config.json is naming
-            # a real path on a real disk -- that is data, and renaming it would
-            # break the thing it addresses. The rule is about the words we
-            # choose, not the paths the world already chose for us.
+            # Markdown we wrote, and nothing else.
+            #
+            # Not source: code that builds ~/.some-tool/config.json is naming a
+            # real path on a real disk, and renaming it breaks the thing it
+            # addresses.
+            #
+            # Not config/: that is captured third-party state. An inventory
+            # that will not name what it inventories is not an inventory.
             hits=$(git grep -nIwiE -- "$term" \
-              -- '*.md' ':!.shared-policy' ':!prose-rules.txt' || true)
+              -- '*.md' ':!.shared-policy' ':!prose-rules.txt' ':!config/' || true)
             if [ -n "$hits" ]; then
               status=1
               printf '::error::banned wording "%s" -- %s\n' "$term" "$reason"
