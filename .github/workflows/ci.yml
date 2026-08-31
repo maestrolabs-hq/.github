@@ -1,0 +1,30 @@
+# The repository every other repository executes had no CI of its own.
+#
+# All ten workflows here are `workflow_call`, so nothing ran them in place.
+# Meanwhile three siblings execute this repository's main branch on every push
+# and every pull request -- including rust-release.yml, which holds
+# contents: write, id-token: write and attestations: write. The one repository
+# whose compromise reaches all the others was the only one with no gate.
+#
+# It calls its own reusable workflow. If the shared fast tier is broken, the
+# repository that ships it finds out first.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast:
+    uses: $/.github/workflows/common-fast.yml
+    permissions:
+      contents: read
+      pull-requests: read

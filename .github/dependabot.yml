@@ -1,0 +1,24 @@
+# Every action in the estate is pinned to a SHA, here, in this repository.
+#
+# Org policy requires SHA pinning, which is right: a tag can be moved under us.
+# The cost is that a pin never moves on its own, so without this file a CVE in
+# a pinned action stays in every repository's CI indefinitely -- invisible, in
+# the one place guaranteed to be running.
+#
+# This repository was excluded from the baseline's dependabot scope. That was
+# the exclusion that mattered most.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+      include: scope
+    groups:
+      actions:
+        patterns: ["*"]
