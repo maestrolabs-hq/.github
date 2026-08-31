@@ -1,0 +1,125 @@
+# The TypeScript fast tier. One job per check, for the same reason as Rust:
+# a fused context cannot say which gate failed.
+#
+# Mapping, so the two languages stay comparable rather than each growing its
+# own habits:
+#
+#   rust-format  ->  ts-format   biome format
+#   rust-lint    ->  ts-lint     biome lint
+#   (none)       ->  ts-types    tsc --noEmit
+#   rust-test    ->  ts-test     node --test, plus the duplication gate
+#   rust-audit   ->  ts-audit    npm audit, plus unused-dependency detection
+#
+# ts-types has no Rust counterpart because rustc is not optional. In
+# TypeScript the type check is a separate tool that can be skipped, which is
+# exactly why it gets its own required context.
+
+name: TypeScript fast
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        required: false
+        default: "24"
+        type: string
+      working-directory:
+        description: "Where package.json lives, when it is not the repository root."
+        required: false
+        default: "."
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  ts-format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+      - working-directory: ${{ inputs.working-directory }}
+        run: npm ci
+      - working-directory: ${{ inputs.working-directory }}
+        run: npx biome format .
+
+  ts-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+      - working-directory: ${{ inputs.working-directory }}
+        run: npm ci
+      - working-directory: ${{ inputs.working-directory }}
+        run: npx biome lint .
+
+  # Its own context, not folded into lint: a type error is a different kind of
+  # wrong from a style violation, and tsc is the only thing that finds it.
+  ts-types:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+      - working-directory: ${{ inputs.working-directory }}
+        run: npm ci
+      - working-directory: ${{ inputs.working-directory }}
+        run: npx tsc --noEmit
+
+  ts-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+      - uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
+        with:
+          tool: similarity-ts
+      - working-directory: ${{ inputs.working-directory }}
+        run: npm ci
+      # similarity-ts is installed because one of these tests shells out to
+      # it -- the same copy-paste gate as Rust, from the same author's tool,
+      # and an allowlist rather than a threshold for the same reason.
+      - working-directory: ${{ inputs.working-directory }}
+        run: node --test
+
+  ts-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+      - working-directory: ${{ inputs.working-directory }}
+        run: npm ci
+      - working-directory: ${{ inputs.working-directory }}
+        run: npm audit --audit-level=moderate
+      # An unused dependency is a supply-chain surface nobody is watching --
+      # the same reason cargo-machete sits in rust-audit.
+      - working-directory: ${{ inputs.working-directory }}
+        run: npx knip --no-exit-code --reporter compact
