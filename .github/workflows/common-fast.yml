@@ -58,4 +58,12 @@ jobs:
       - uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
         with:
           tool: zizmor@1.30.0
-      - run: zizmor --persona=regular .github/workflows
+      # The pinning policy is one file in this repository rather than a copy in
+      # each caller. Fetched by tag so the policy and the workflow that applies
+      # it move together.
+      - name: Fetch the shared pinning policy
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/zizmor.yml \
+            https://raw.githubusercontent.com/maestrolabs-hq/.github/main/zizmor.yml
+      - run: zizmor --config /tmp/zizmor.yml --persona=regular .github/workflows
