@@ -46,6 +46,47 @@ jobs:
           sudo install -m755 gitleaks /usr/local/bin/gitleaks
       - run: gitleaks git --no-banner --redact --verbose .
 
+  # Prose has no compiler. This is the compiler.
+  #
+  # The rules live in this repository rather than in each caller, because the
+  # leak they exist to stop happened exactly the other way: one repository
+  # carried the rule, a sibling named a sink implementation in three files,
+  # and nothing looked. A rule that guards only its own repository guards the
+  # one place least likely to break it.
+  prose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: maestrolabs-hq/.github
+          path: .shared-policy
+          persist-credentials: false
+      - name: No banned wording
+        run: |
+          set -uo pipefail
+          status=0
+          while IFS=$'\t' read -r term reason; do
+            case "$term" in ''|\#*) continue ;; esac
+            # Whole word, case-insensitive, tracked files only, and never the
+            # rules file itself or the checkout it came from.
+            # config/ is captured third-party configuration. Those files name
+            # the tools they configure because that is what they are; renaming
+            # anything in them would break the restore they exist for.
+            hits=$(git grep -nIwiE -- "$term" \
+              -- ':!.shared-policy' ':!prose-rules.txt' ':!config/' ':!**/*.lock' || true)
+            if [ -n "$hits" ]; then
+              status=1
+              printf '::error::banned wording "%s" -- %s\n' "$term" "$reason"
+              printf '%s\n' "$hits" | sed 's/^/    /'
+            fi
+          done < .shared-policy/prose-rules.txt
+          if [ "$status" -eq 0 ]; then echo "No banned wording."; fi
+          exit "$status"
+
   # The workflows are code with access to the repository, so they are audited
   # too: unpinned actions, excessive permissions, injectable expressions.
   actions-security:
