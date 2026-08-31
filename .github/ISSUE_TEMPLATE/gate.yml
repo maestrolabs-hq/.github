@@ -1,0 +1,39 @@
+name: A gate is wrong
+description: A check failed on correct code, or passed on incorrect code.
+labels: [gate]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Both directions matter, and the second matters more. A gate that
+        cannot fail reports green while looking at nothing, which is worse
+        than not having it.
+
+  - type: dropdown
+    id: direction
+    attributes:
+      label: Which way is it wrong
+      options:
+        - It failed on code that is correct
+        - It passed on code that is not
+    validations:
+      required: true
+
+  - type: input
+    id: which
+    attributes:
+      label: Which check
+      placeholder: "fast / rust-lint, or the local hook id"
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: >
+        The run, the output, and -- if it passed on bad code -- the change
+        that should have been caught.
+      render: text
+    validations:
+      required: true
