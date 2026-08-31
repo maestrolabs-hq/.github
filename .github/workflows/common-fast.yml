@@ -59,11 +59,13 @@ jobs:
         with:
           tool: zizmor@1.30.0
       # The pinning policy is one file in this repository rather than a copy in
-      # each caller. Fetched by tag so the policy and the workflow that applies
-      # it move together.
-      - name: Fetch the shared pinning policy
-        run: |
-          set -euo pipefail
-          curl -fsSL -o /tmp/zizmor.yml \
-            https://raw.githubusercontent.com/maestrolabs-hq/.github/main/zizmor.yml
-      - run: zizmor --config /tmp/zizmor.yml --persona=regular .github/workflows
+      # each caller. Checked out rather than fetched over HTTP: the first
+      # version used curl and failed on its first real run with a connection
+      # reset. A gate that fails on a network blip teaches people to re-run
+      # until green, which costs exactly what bypassing it would.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: maestrolabs-hq/.github
+          path: .shared-policy
+          persist-credentials: false
+      - run: zizmor --config .shared-policy/zizmor.yml --persona=regular .github/workflows
