@@ -1,0 +1,100 @@
+# Hook definitions shared by every repository in the organisation.
+#
+# A caller references this repository by URL and pins a revision, so the
+# commands themselves are defined once. What stays in the caller is the
+# revision and any repository-specific argument.
+#
+# Stages matter: a commit that takes a minute is a commit people learn to make
+# with --no-verify, and that habit then applies to the checks that mattered.
+# Formatting and lint run at commit time; anything that compiles or runs the
+# test tree waits for the push.
+
+- id: cargo-fmt
+  name: cargo fmt (check only)
+  entry: cargo fmt --all --check
+  language: system
+  types: [rust]
+  pass_filenames: false
+
+- id: cargo-clippy
+  name: cargo clippy (warnings are errors)
+  entry: cargo clippy --all-targets --all-features -- -D warnings
+  language: system
+  types: [rust]
+  pass_filenames: false
+
+- id: cargo-test
+  name: cargo test
+  entry: cargo test --all-targets
+  language: system
+  types: [rust]
+  pass_filenames: false
+  stages: [pre-push]
+
+- id: cargo-machete
+  name: cargo machete (unused dependencies)
+  entry: cargo machete
+  language: system
+  always_run: true
+  pass_filenames: false
+  stages: [pre-push]
+
+- id: cargo-deny
+  name: cargo deny (advisories, licences, bans, sources)
+  entry: cargo deny check
+  language: system
+  always_run: true
+  pass_filenames: false
+  stages: [pre-push]
+
+- id: ruff-format
+  name: ruff format (check only)
+  entry: uv run ruff format --check .
+  language: system
+  types: [python]
+  pass_filenames: false
+
+- id: ruff-lint
+  name: ruff check
+  entry: uv run ruff check .
+  language: system
+  types: [python]
+  pass_filenames: false
+
+- id: pytest
+  name: pytest
+  entry: uv run pytest -q
+  language: system
+  types: [python]
+  pass_filenames: false
+  stages: [pre-push]
+
+- id: biome-format
+  name: biome format (check only)
+  entry: npx biome format .
+  language: system
+  types_or: [ts, javascript, json]
+  pass_filenames: false
+
+- id: biome-lint
+  name: biome lint
+  entry: npx biome lint .
+  language: system
+  types_or: [ts, javascript, json]
+  pass_filenames: false
+
+- id: tsc
+  name: tsc --noEmit
+  entry: npx tsc --noEmit
+  language: system
+  types: [ts]
+  pass_filenames: false
+  stages: [pre-push]
+
+- id: vitest
+  name: vitest
+  entry: npx vitest run
+  language: system
+  types_or: [ts, javascript]
+  pass_filenames: false
+  stages: [pre-push]
