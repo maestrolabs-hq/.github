@@ -21,7 +21,7 @@ private information. Deliberately wasting reviewers' time.
 
 ## Reporting
 
-Raise it privately with the maintainer: francois.ldaigneault@gmail.com.
+Raise it privately with the maintainer: <francois.ldaigneault@gmail.com>.
 Reports are read by one person and are not shared further without your
 agreement.
 

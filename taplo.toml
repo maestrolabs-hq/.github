@@ -1,0 +1,45 @@
+# TOML formatting for the organisation.
+#
+# Fetched from this repository by common-fast.yml, so every repository formats
+# TOML the same way -- including ones that do not exist yet.
+#
+# taplo's defaults were not taken as-is. Run unconfigured, it rewrites
+#
+#   members = [
+#       "crates/protocol",
+#       "crates/cli",
+#   ]
+#
+# onto a single line, which is shorter and diffs worse: adding a member then
+# rewrites the existing line instead of adding a new one, so every review of a
+# new crate shows a change to the old ones. The settings below keep the
+# vertical form.
+
+[formatting]
+# Never collapse a multi-line array onto one line. This is the whole reason
+# this file exists.
+array_auto_collapse = false
+
+# Do expand an array that has grown past the line width. Growth should change
+# the shape; shrinking should not.
+array_auto_expand = true
+
+# A trailing comma on the last element, so adding one after it is a one-line
+# diff rather than two.
+array_trailing_comma = true
+
+# Blank lines are a deliberate signal between sections of a manifest. Allow
+# them, but not runs of them.
+allowed_blank_lines = 1
+
+# Align nothing. Column alignment looks tidy and reflows an entire block the
+# first time a key gets longer, burying the real change.
+align_entries = false
+align_comments = false
+
+# Never reorder. A manifest's order carries meaning -- [package] before
+# [dependencies] is not alphabetical, it is narrative.
+reorder_keys = false
+reorder_arrays = false
+
+indent_string = "    "

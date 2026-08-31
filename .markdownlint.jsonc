@@ -1,0 +1,64 @@
+// Markdown rules for the organisation.
+//
+// The estate is roughly 3,200 lines of Markdown across 42 files -- READMEs,
+// ADRs, design notes -- and nothing checked any of it. Prose has no compiler,
+// so a broken table or an unlabelled code fence ships silently.
+//
+// Run with default rules this produced 203 findings, of which 9 were real.
+// The other 194 were the linter objecting to the flagship README design on
+// purpose. A gate that reports 194 false positives is a gate people learn to
+// ignore, so each rule below is either on for a reason or off for one.
+//
+// Fetched from this repository by common-fast.yml, so every repository is
+// held to the same standard, including ones that do not exist yet.
+{
+  "default": true,
+
+  // OFF -- the four that fight a deliberate design.
+  //
+  // The flagship READMEs are centred: a <div align="center"> wrapper, badge
+  // images, and an italic tagline before the first heading. That is the
+  // intended presentation, and these four rules each object to one part of it.
+  // Turning them off is choosing the design over the default.
+
+  // Long lines. Prose here wraps near 80 by habit, but a badge row is one
+  // unbreakable line and a table column cannot be split. 157 of the 203
+  // findings were this rule, almost all of them on rows that cannot wrap.
+  "MD013": false,
+
+  // Inline HTML. Markdown cannot centre anything, so the alternative to
+  // <div align="center"> is not cleaner Markdown, it is a left-aligned README.
+  // Scoped to the elements the design actually uses, so a stray <script> is
+  // still caught.
+  "MD033": {
+    "allowed_elements": ["div", "img", "a", "p", "br", "h1", "sub"]
+  },
+
+  // First line must be a top-level heading. It is the centred wrapper instead,
+  // which is the whole point of the wrapper.
+  "MD041": false,
+
+  // Emphasis used instead of a heading. The tagline under the title is
+  // emphasis on purpose: it is a subtitle, not a section.
+  "MD036": false,
+
+  // ON, and these are the ones that earned their place. Every rule below
+  // caught something real in the estate on its first run.
+
+  // Duplicate headings, but only among siblings. "## Consequences" appears in
+  // every ADR and that is correct; two of them in one document is not.
+  "MD024": { "siblings_only": true },
+
+  // Ordered lists numbered 1. 1. 1. render fine and diff badly: inserting an
+  // item rewrites every line after it. One style, chosen here.
+  "MD029": { "style": "ordered" }
+
+  // Left at their defaults, deliberately:
+  //   MD040  a code fence must name its language -- this caught a TODO.md
+  //          fence the same day it was written
+  //   MD060  table column style -- caught an ADR table whose rows did not
+  //          line up with its header
+  //   MD034  bare URLs, which do not render as links everywhere
+  //   MD012  runs of blank lines
+  //   MD010  hard tabs, which .editorconfig already forbids elsewhere
+}
