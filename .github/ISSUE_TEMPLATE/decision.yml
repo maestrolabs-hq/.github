@@ -1,0 +1,35 @@
+name: Reopen a decision
+description: An ADR is wrong, or the ground it stood on has moved.
+labels: [decision]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Recorded decisions are meant to be reopened when the reasoning stops
+        holding -- not re-litigated on preference. New evidence is the price
+        of admission.
+
+  - type: input
+    id: adr
+    attributes:
+      label: Which decision
+      placeholder: "maestro-governance ADR-0001"
+    validations:
+      required: true
+
+  - type: textarea
+    id: changed
+    attributes:
+      label: What has changed since it was recorded
+      description: >
+        A tool now does something it could not, a cost turned out different
+        from the estimate, or the decision has a consequence nobody predicted.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would decide instead, and what it costs
+    validations:
+      required: true

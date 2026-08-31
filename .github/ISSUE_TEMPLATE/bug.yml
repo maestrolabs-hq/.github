@@ -1,0 +1,45 @@
+name: Bug
+description: Something behaves differently from what it says it does.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A failing command and its output is worth more than a description of
+        one. If you can reduce it to something short, do -- if not, report it
+        anyway rather than not reporting it.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The command you ran and the output you got, verbatim.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+      description: >
+        If a document or a message told you to expect it, say which. A wrong
+        document is a bug too.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: "v0.1.0, or the commit SHA"
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: "Linux 6.18 / WSL2, macOS 15, Windows 11"
+    validations:
+      required: false
