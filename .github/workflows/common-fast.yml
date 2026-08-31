@@ -73,11 +73,12 @@ jobs:
             case "$term" in ''|\#*) continue ;; esac
             # Whole word, case-insensitive, tracked files only, and never the
             # rules file itself or the checkout it came from.
-            # config/ is captured third-party configuration. Those files name
-            # the tools they configure because that is what they are; renaming
-            # anything in them would break the restore they exist for.
+            # Prose only. Code that builds ~/.some-tool/config.json is naming
+            # a real path on a real disk -- that is data, and renaming it would
+            # break the thing it addresses. The rule is about the words we
+            # choose, not the paths the world already chose for us.
             hits=$(git grep -nIwiE -- "$term" \
-              -- ':!.shared-policy' ':!prose-rules.txt' ':!config/' ':!**/*.lock' || true)
+              -- '*.md' ':!.shared-policy' ':!prose-rules.txt' || true)
             if [ -n "$hits" ]; then
               status=1
               printf '::error::banned wording "%s" -- %s\n' "$term" "$reason"

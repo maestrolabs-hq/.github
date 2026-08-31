@@ -1,7 +1,14 @@
 # Words this organisation does not use, and what to write instead.
 #
 # One rule per line: <term> <TAB> <reason and replacement>.
-# Matching is whole-word and case-insensitive. Comments and blanks ignored.
+# Matching is whole-word and case-insensitive, over Markdown only. Comments and
+# blanks are ignored.
+#
+# Markdown only, deliberately. Code that constructs ~/.some-tool/config.json is
+# naming a path that exists; renaming it breaks the thing it addresses. This
+# rule governs the words we choose, not the ones the world chose for us. A
+# repository that must stay sink-agnostic in its source as well can add a
+# stricter local rule -- maestro-core does.
 #
 # This lives here rather than in one repository because the leak it exists to
 # stop happened exactly that way: maestro-core carried the rule, maestro-pi-config
