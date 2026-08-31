@@ -140,6 +140,66 @@ jobs:
           fi
           echo "Every file explains itself."
 
+  # 3,200 lines of Markdown across the estate, and nothing read any of it.
+  #
+  # Prose has no compiler, so a broken table or an unlabelled fence ships
+  # silently. Both happened here in a single afternoon.
+  #
+  # The rule set is in this repository, not the caller, and it is not the
+  # default one: run unconfigured, markdownlint produced 203 findings of which
+  # 9 were real, the rest being objections to the deliberately centred README.
+  # A gate that reports 194 false positives is a gate people learn to ignore.
+  markdown:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: maestrolabs-hq/.github
+          path: .shared-policy
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      # config/ is captured third-party state -- skill files and tool
+      # documentation written by someone else. Reformatting it would defeat
+      # the point of capturing it verbatim.
+      - run: >
+          npx --yes markdownlint-cli2@0.18.1
+          --config .shared-policy/.markdownlint.jsonc
+          "**/*.md" "!node_modules" "!.shared-policy" "!config"
+
+  # One TOML style across the estate.
+  #
+  # cargo already rejects a malformed manifest, so this is about shape rather
+  # than validity: a repository whose Cargo.toml is formatted differently makes
+  # every diff against it noisier than it needs to be.
+  toml:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: maestrolabs-hq/.github
+          path: .shared-policy
+          persist-credentials: false
+      - uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
+        with:
+          tool: taplo-cli
+      - name: TOML is formatted
+        run: |
+          set -uo pipefail
+          files=$(git ls-files '*.toml' | grep -v '^config/' || true)
+          if [ -z "$files" ]; then echo "No TOML."; exit 0; fi
+          # shellcheck disable=SC2086
+          taplo fmt --config .shared-policy/taplo.toml --check --diff $files
+
   # The workflows are code with access to the repository, so they are audited
   # too: unpinned actions, excessive permissions, injectable expressions.
   actions-security:
