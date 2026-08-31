@@ -1,0 +1,54 @@
+# Coverage, measured and published where a reader can see it.
+#
+# Not gated. This toolchain reports no branch data, so a line floor would
+# claim a guarantee it cannot make -- see maestro-governance ADR-0001. The
+# number is published to the job summary and uploaded as an artefact so a
+# trend is visible across runs without anyone having to open a log.
+
+name: Rust coverage
+
+on:
+  workflow_call:
+    inputs:
+      retention-days:
+        required: false
+        default: 30
+        type: number
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
+        with:
+          tool: cargo-llvm-cov,similarity-rs
+      - name: Measure
+        run: |
+          set -euo pipefail
+          cargo llvm-cov --all-targets --lcov --output-path lcov.info
+          cargo llvm-cov report --summary-only | tee coverage.txt
+      - name: Publish to the run summary
+        if: always()
+        run: |
+          {
+            echo "## Coverage"
+            echo
+            echo '```text'
+            cat coverage.txt 2>/dev/null || echo "(none)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: coverage
+          path: |
+            lcov.info
+            coverage.txt
+          retention-days: ${{ inputs.retention-days }}
