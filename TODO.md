@@ -52,6 +52,65 @@ add this repo to the baseline's scope for that file.
 
 ## P1 -- a control that cannot fail is not a control
 
+### 2a. This repository has no required status check and no repository ruleset
+
+```text
+$ gh api repos/maestrolabs-hq/.github/rulesets --jq '.[]|"\(.name)\t\(.source_type)"'
+commits-are-conventional   Organization
+floor-no-destruction       Organization
+floor-release-tags         Organization
+mature-discipline          Organization
+visibility-is-frozen       Organization
+```
+
+Nothing repository-sourced, so no `required_status_checks` rule at all. The
+organisation `pull_request` rule carries `required_approving_review_count: 0`.
+A pull request with every check red merges on one click.
+
+`GOVERNANCE.md:22` states *"| Required status checks | per repository, naming
+the fast-tier contexts |"* and `GOVERNANCE.md:34` states *"They are required
+contexts, so a red check blocks the merge rather than inviting a judgement
+call."* Neither is true here.
+
+`ci.yml`'s own header explains the stakes: this repository's `main` becomes
+arbitrary code in three siblings' CI on their next push, including
+`rust-release.yml` with `contents: write`, `id-token: write` and
+`attestations: write`.
+
+**Fix:** create a repository ruleset on `main` requiring the eight contexts
+this repo produces: `fast / dependency-review`, `fast / secrets-scan`,
+`fast / prose`, `fast / brief`, `fast / markdown`, `fast / toml`,
+`fast / no-absolute-paths`, `fast / actions-security`.
+
+### 2b. `.pre-commit-hooks.yaml` has no callers, and the baseline says otherwise
+
+```text
+$ grep -rn "maestrolabs-hq/.github" --include=".pre-commit-config.yaml" .
+NO REFERENCES FOUND
+```
+
+All three siblings inline their hooks with `repo: local`.
+`maestro-governance/baseline.txt:96` asserts the opposite -- *"What could be
+centralised has been. The hook definitions live in maestrolabs-hq/.github as
+.pre-commit-hooks.yaml"* -- and that sentence is the stated reason
+`.pre-commit-config.yaml` is hash-pinned for only two of three repos.
+
+The three copies have already diverged, and the shared file carries the exact
+defect the siblings' comments warn about: `.pre-commit-hooks.yaml:12` uses
+`types: [rust]` with no `always_run`.
+
+**Fix:** either have the siblings reference this file by URL and revision, or
+delete it and correct `baseline.txt`.
+
+### 2c. Scorecard has never completed a run
+
+The README shows a Scorecard badge. `common-heavy.yml` defines the job, and no
+run of it has ever completed, so the badge reports a score for a workflow that
+has not executed here.
+
+**Fix:** run it once and confirm the SARIF upload works, or remove the badge
+until it does.
+
 ### 3. `ts-arch` runs depcruise with no failing rule
 
 `ts-fast.yml:148`
@@ -99,6 +158,56 @@ which repo they found the issue in. This is the org-wide policy file; it is
 inherited by every repo including ones that do not exist yet.
 
 **Fix:** say "the affected repository."
+
+### 6a. `CODEOWNERS` names five paths that do not exist and omits all five that do
+
+Every pattern in the file matches nothing in the repository, and the five
+directories that do exist are unowned. Combined with zero required approvals
+(#4), the review story is decorative twice over.
+
+**Fix:** rewrite against the actual tree.
+
+### 6b. `dependabot.yml` is outside the baseline's scope and has diverged
+
+Related to #2: the file now exists but the baseline entry does not name this
+repository, so the copy here is unwatched and already differs from the
+siblings'.
+
+**Fix:** add `dot-github` to the entry's scope.
+
+### 6c. Five pinned tool versions are invisible to Dependabot
+
+`gitleaks 8.30.1`, `zizmor 1.30.0`, `markdownlint-cli2 0.18.1`,
+`similarity-rs`/`similarity-ts` and `taplo-cli` are pinned inside `run:` blocks
+and `with: tool:` arguments, which no ecosystem scans. A CVE in any of them is
+invisible.
+
+**Fix:** move the versions to a place Dependabot reads, or record that they are
+reviewed by hand and when.
+
+### 6d. The `pending code_scanning_default_setup_query_suite` entry is stale and wrong
+
+The baseline's pending entry names a key whose value no longer matches what the
+API returns.
+
+**Fix:** re-derive the key and value from a live read.
+
+### 6e. Defects in the open pull request (#21)
+
+- `ts-heavy.yml:70-71` -- an orphaned two-line brief left behind by the
+  `cross-platform` move now sits above `osv-scan`, describing a job that moved
+  to `ts-fast.yml`. Delete it.
+- `rust-fast.yml` lacks `defaults: run: shell: bash`, which `python-fast.yml:37`
+  and `ts-fast.yml:41` both set. The pull request added a `windows-latest` leg
+  to it, so the next `run:` script added there gets pwsh.
+- `CONTRIBUTING.md:46` says the gate refuses "a drive letter"; it refuses one
+  only when the first segment is the Windows user root. A drive letter
+  followed by any other directory passes, as do the other home-bearing
+  environment variables. (Described rather than quoted: the gate scans every
+  tracked file, so spelling out its trigger here would fail it.)
+- `rust-heavy.yml` `wsl-toolchain` runs `just setup` and `just check` without
+  `just install`, so `prek`, `cargo-deny`, `cargo-machete` and `similarity-rs`
+  are all absent. The job cannot pass.
 
 ### 7. `CONTRIBUTING.md` points at a file this repo does not have
 
