@@ -31,7 +31,21 @@
   // Scoped to the elements the design actually uses, so a stray <script> is
   // still caught.
   "MD033": {
-    "allowed_elements": ["div", "img", "a", "p", "br", "h1", "sub"]
+    "allowed_elements": [
+      "div",
+      "img",
+      "a",
+      "p",
+      "br",
+      "h1",
+      "h2",
+      "sub",
+      "nav",
+      "ol",
+      "li",
+      "strong",
+      "span"
+    ]
   },
 
   // First line must be a top-level heading. It is the centred wrapper instead,
