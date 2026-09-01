@@ -214,3 +214,157 @@ API returns.
 `CONTRIBUTING.md:12` tells a contributor to run the hooks. There is no
 `.pre-commit-config.yaml` here. A contributor to this repo -- the highest-risk
 repo in the estate -- has no local gate at all. Fixed by #1.
+
+---
+
+## Round 2 -- the shared workflows, executed rather than read
+
+### 7. `npx <tool>` resolves four shipped tools to the wrong npm package
+
+`ts-fast.yml:181` runs `npx depcruise --config .dependency-cruiser.js src`. The
+`depcruise` binary is shipped by `dependency-cruiser`; a package literally named
+`depcruise` also exists. Run exactly as CI runs it, with the tool absent from
+`package.json`:
+
+```text
+$ CI=true npx depcruise --version </dev/null
+npm warn exec The following package was not found and will be installed: depcruise@1.0.0
+This is a placeholder published to prevent dependency confusion.
+EXIT=0
+```
+
+npm 11 auto-installs without prompting in a non-TTY. Four of six bare tool
+names resolve wrongly:
+
+| call site | intended package | what `npx` fetches |
+| --- | --- | --- |
+| `ts-fast.yml:59`, `:74` | `@biomejs/biome` | an unrelated env-var manager |
+| `ts-fast.yml:91` | `typescript` | a deprecated 2016 release |
+| `ts-fast.yml:181` | `dependency-cruiser` | a placeholder that **exits 0** |
+| `ts-heavy.yml:134` | `@stryker-mutator/core` | a deprecated v0 |
+
+The same four names are in `.pre-commit-hooks.yaml:74,81,88,96`, which this
+repository publishes as the organisation's shared hook definitions.
+`common-fast.yml:171` shows the author knows the correct pattern -- name and
+version both pinned -- and no other `npx` call follows it.
+
+**Why it matters:** `npm ci` runs first, so a consumer who declares the real
+dependency is protected. One who does not gets an arbitrary registry package
+executed in CI, and for `ts-arch` the architecture gate then reports success.
+Anyone who publishes to those four names gets code execution in every consumer.
+
+**Fix:** `npm exec --no -- <tool>`, which refuses to fetch and turns a silent
+registry install into a red build.
+
+### 8. Every Scorecard run in the estate reads zero files
+
+`.gitattributes:77-84`, byte-identical in all four repositories, marks
+`.github/`, `tests/`, `docs/` and `justfile` as `export-ignore`. GitHub's
+archive endpoint honours that, and `common-heavy.yml:24-28` calls
+`ossf/scorecard-action` without `file_mode`, whose default is `archive`.
+
+```text
+$ curl -L .../maestro-governance/tarball/ | tar tz | wc -l
+20                                   # git ls-tree: 40
+```
+
+For `.github` itself the tarball carries 15 of 35 files and **not one of the
+eleven reusable workflows**. Same version, same repository, only the mode
+differing:
+
+```text
+--file-mode archive          --file-mode git
+aggregate: 4.6               aggregate: 6.8
+ -1 Dangerous-Workflow         10 Dangerous-Workflow
+  0 Dependency-Update-Tool     10 Dependency-Update-Tool
+ -1 Pinned-Dependencies        10 Pinned-Dependencies
+ -1 Token-Permissions          10 Token-Permissions
+```
+
+A control run on an unrelated repository scores identically in both modes, so
+this is these repositories' `export-ignore`, not an upstream bug. Live CI
+matches archive mode exactly.
+
+**Why it matters:** the estate's only supply-chain scorecard evaluates the three
+checks that would validate its central claims -- every action pinned, every
+token least-privilege, no dangerous workflow patterns -- against an empty file
+list, drops them as inconclusive, publishes a false 4.6 with
+`publish_results: true`, and files a permanent High alert saying no dependency
+update tool is configured in repositories whose `dependabot.yml` is a tracked
+baseline item.
+
+**Fix:** `file_mode: git`. Separately reconsider `tests/` and `docs/` under
+`export-ignore`: a release tarball without tests is not verifiable.
+
+### 9. The prose gate exits 0 when its rules file is missing
+
+`common-fast.yml:91` -- `done < .shared-policy/prose-rules.txt`, under
+`set -uo pipefail` with no `set -e`:
+
+```text
+=== rules file PRESENT, violation present ===   exit=1
+=== rules file MISSING ===                      No banned wording.  exit=0
+=== rules file present but EMPTY ===            No banned wording.  exit=0
+```
+
+The redirect fails, the loop body never runs, `status` stays 0, and the job
+prints success. This gate runs in all four repositories and exists, per its own
+comment, because *"one repository carried the rule, a sibling named a sink
+implementation in three files, and nothing looked."*
+
+**Fix:** assert the file exists and is non-empty before the loop.
+
+### 10. `actions-security` runs zizmor offline, so a lying version comment passes
+
+zizmor is invoked without network access, so the audit that would notice a
+pinned SHA whose version comment does not match never runs. The pinning policy
+also cannot see the `$/` local reference form this repository's own `ci.yml`
+uses, and accepts any ref for the organisation.
+
+**Fix:** give the job the token zizmor needs for its online audits, and extend
+the policy to the local reference form.
+
+### 11. The release pipeline has never executed and holds the estate's only write permissions
+
+`rust-release.yml` -- 139 lines, `contents: write`, `id-token: write`,
+`attestations: write` -- has zero callers and zero runs. No repository has a
+tag. Its CycloneDX SBOM describes one crate of a workspace, chosen by
+filesystem order, and it builds a Linux-only binary for repositories whose
+headline claim is three platforms.
+
+Meanwhile all three siblings' `CHANGELOG.md:8` states *"This file is generated
+by release-please"*, and `baseline.txt:124` treats their identity as evidence
+the pipeline holds them in step. Nothing generates them; they are identical
+because none has been touched.
+
+**Fix:** wire it up with the App token it needs, or delete the workflow, the six
+release-please files and the four baseline lines, and rewrite the CHANGELOG
+headers.
+
+### 12. `common / dependency-review` is a required context that has never reviewed a dependency
+
+Required in all three Rust repositories. The job log, verbatim:
+`Dependency review did not detect any vulnerable packages`. It reads the pull
+request's dependency manifest diff; on a Rust repository with no manifest
+change it has nothing to look at, which is every run so far.
+
+**Fix:** keep it, and stop counting it as coverage.
+
+### 13. Smaller, verified
+
+- Five of ten reusable workflows have no caller; PR #21 adds ninety lines to
+  three of them.
+- `rust-coverage.yml` has no callers and is duplicated inside `rust-heavy.yml`.
+- Two phantom workflows are registered on GitHub and cannot be opened.
+- `ts-heavy.yml` documents its coverage job as gated; it enforces nothing.
+- `taplo` silently falls back to default formatting when the shared config is
+  missing.
+- `python-fast.yml` declares an input no step reads.
+- Two shared hooks run Cargo in every repository regardless of language.
+- `prose-rules.txt` contains non-ASCII in a file governed by the estate's
+  English-only rule.
+- ADR-0005 names an enforcing tool for Python and TypeScript; neither exists.
+- This repository calls the shared workflow under a job name none of the
+  required contexts match.
+- The WSL job in PR #21 is the only unverified remote code execution in the
+  estate's CI.
