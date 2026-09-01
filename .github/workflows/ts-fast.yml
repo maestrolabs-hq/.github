@@ -115,6 +115,36 @@ jobs:
       - working-directory: ${{ inputs.working-directory }}
         run: npx vitest run
 
+  # Path handling is where a Node tool breaks on Windows, and ubuntu-latest
+  # cannot speak for it. This was weekly evidence until the estate measured
+  # its own tiers and found the thirty-minute matrix that justified
+  # non-blocking did not exist; see rust-fast.yml, where the same move is
+  # written down at length.
+  #
+  # Each matrix leg reports its own context, so a failure names the platform
+  # before anyone opens it.
+  cross-platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+      - uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
+        with:
+          tool: similarity-ts
+      - working-directory: ${{ inputs.working-directory }}
+        run: npm ci
+      - working-directory: ${{ inputs.working-directory }}
+        run: npx vitest run
+
   ts-audit:
     runs-on: ubuntu-latest
     timeout-minutes: 10

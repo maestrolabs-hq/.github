@@ -10,7 +10,9 @@
 #   osv-scan                PyPI advisory data; uv resolves and reports
 #                           independently. Two sources, same reason as
 #                           everywhere else.
-#   cross-platform      ->  same.
+#   cross-platform      ->  moved to the fast tier, with Rust and TypeScript.
+#                           A break on Windows now blocks the pull request
+#                           that caused it.
 #   coverage            ->  no separate job. Unlike Rust, the floor is already
 #                           enforced in the fast tier, with branch coverage,
 #                           so a heavy report would repeat a settled answer.
@@ -64,23 +66,6 @@ jobs:
           uv python install "$PY"
           uv sync --locked --python "$PY"
           uv run --python "$PY" pytest -q
-
-  cross-platform:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-        with:
-          version: ${{ inputs.uv-version }}
-      - run: uv sync --locked
-      - run: uv run pytest -q
 
   # Deliberately redundant with pip-audit in the fast tier.
   uv-audit:
