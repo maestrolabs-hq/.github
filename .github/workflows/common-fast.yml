@@ -81,8 +81,21 @@ jobs:
             #
             # Not config/: that is captured third-party state. An inventory
             # that will not name what it inventories is not an inventory.
+            # Provider names and the provider's internal vocabulary are allowed
+            # only where the estate documents that provider-facing boundary.
+            exclusions=()
+            case "$term" in
+              mempalace|codegraphcontext|graphify|wing|drawer)
+                exclusions=(
+                  ':!docs/providers/**'
+                  ':!docs/skills/**'
+                  ':!docs/tools/**'
+                )
+                ;;
+            esac
             hits=$(git grep -nIwiE -- "$term" \
-              -- '*.md' ':!.shared-policy' ':!prose-rules.txt' ':!config/' || true)
+              -- '*.md' ':!.shared-policy' ':!prose-rules.txt' ':!config/' \
+              "${exclusions[@]}" || true)
             if [ -n "$hits" ]; then
               status=1
               printf '::error::banned wording "%s" -- %s\n' "$term" "$reason"
