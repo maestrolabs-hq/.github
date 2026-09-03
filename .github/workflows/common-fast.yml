@@ -83,6 +83,13 @@ jobs:
             # that will not name what it inventories is not an inventory.
             # Provider names and the provider's internal vocabulary are allowed
             # only where the estate documents that provider-facing boundary.
+            #
+            # Not DESIGN.md: a DESIGN.md dropped into a project verbatim is a
+            # brand's own captured design vocabulary, the same category as
+            # config/. Naming a brand's UI component -- Vercel's
+            # "ex-cart-drawer" -- is not the estate borrowing a sink's storage
+            # model; it is the component the brand named, captured as it
+            # exists upstream.
             exclusions=()
             case "$term" in
               mempalace|codegraphcontext|graphify|wing|drawer)
@@ -94,7 +101,7 @@ jobs:
                 ;;
             esac
             hits=$(git grep -nIwiE -- "$term" \
-              -- '*.md' ':!.shared-policy' ':!prose-rules.txt' ':!config/' \
+              -- '*.md' ':!.shared-policy' ':!prose-rules.txt' ':!config/' ':!DESIGN.md' \
               "${exclusions[@]}" || true)
             if [ -n "$hits" ]; then
               status=1
@@ -179,11 +186,14 @@ jobs:
           node-version: '22'
       # config/ is captured third-party state -- skill files and tool
       # documentation written by someone else. Reformatting it would defeat
-      # the point of capturing it verbatim.
+      # the point of capturing it verbatim. A DESIGN.md is the same case: a
+      # brand's design vocabulary, dropped into a project exactly as the
+      # upstream collection wrote it, so reformatting it would defeat
+      # capturing it verbatim too.
       - run: >
           npx --yes markdownlint-cli2@0.18.1
           --config .shared-policy/.markdownlint.jsonc
-          "**/*.md" "!node_modules" "!.shared-policy" "!config"
+          "**/*.md" "!node_modules" "!.shared-policy" "!config" "!DESIGN.md"
 
   # One TOML style across the estate.
   #
