@@ -34,6 +34,17 @@ true so the list cannot rot into excuses.
 
 ## Prose
 
-English only, enforced by a test. No absolute paths anywhere -- in code,
-configuration, task runner or workflow. Both rules are mechanical, and both
-have caught real regressions.
+English only, enforced by a test. No path anchored to one machine anywhere --
+in code, configuration, task runner or workflow -- enforced by the
+`no-absolute-paths` gate in the fast tier.
+
+That second gate is newer than the sentence describing it. The rule was
+written down in three repositories and checked by nothing for as long as it
+had been quoted in reviews, which is how a documented gate rots: believed, and
+never run.
+
+What it refuses is a path that names a machine -- a home directory, a drive
+letter, a user profile. What it allows, deliberately, is `/usr`, `/opt`,
+`/etc`, `/var` and `/tmp`: those name a platform convention rather than a
+machine, and a gate that fails on `#!/bin/sh` is one people learn to skip.
+In a test, use a synthetic root such as `/somewhere`.

@@ -1,9 +1,16 @@
 # The heavy tier: weekly and on demand.
 #
-# These are evidence checks, never required ruleset contexts. Blocking a merge
-# on a thirty-minute matrix is how a team learns to bypass its own gates. What
-# matters instead is freshness: a heavy result older than eight days is not
-# evidence of anything, and the fast tier does not cover what these do.
+# These are evidence checks, never required ruleset contexts. What matters
+# instead is freshness: a heavy result older than eight days is not evidence
+# of anything, and the fast tier does not cover what these do.
+#
+# The tier once held the Windows and macOS builds on the reasoning that
+# blocking a merge on a thirty-minute matrix teaches a team to bypass its own
+# gates. Measurement retired that: the matrix is minutes, not thirty, and the
+# runners are unmetered, so those moved to the fast tier where a break stops
+# the pull request that caused it. What belongs here is what is genuinely slow
+# or genuinely periodic, which is the test this tier should have been applying
+# all along.
 #
 # Deliberately absent, with reasons, so the gaps are decisions rather than
 # oversights:
@@ -28,29 +35,44 @@ permissions:
   contents: read
 
 jobs:
-  # The only place the cfg(not(unix)) branches are ever compiled. On Linux they
-  # are invisible to every gate, so a typo there would ship undetected.
-  cross-platform:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+  # Windows and macOS moved to the fast tier, where a break blocks the pull
+  # request that caused it rather than waiting for the next Monday.
+  #
+  # WSL stayed here, because it is a different question. At the binary level
+  # WSL is Linux -- same cfg(unix), same separator -- so a fourth compile
+  # target would recompile what ubuntu-latest already covers and learn
+  # nothing. What is genuinely untested there is the toolchain setup: WSL
+  # appends the Windows PATH to its own, and that put a broken `just` shim
+  # ahead of the real binary once already. The justfile carries a comment
+  # about it and no gate has ever run it.
+  #
+  # So this runs the task runner rather than the compiler, and it is evidence
+  # rather than a gate: a WSL image takes minutes to come up, and the failure
+  # it catches is environmental, not something a pull request introduces.
+  wsl-toolchain:
+    runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The policy gates run here too, and one of them shells out. They can
-      # only give the same answer on every platform, but installing the tool
-      # is cheaper than maintaining a list of which test targets are
-      # platform-dependent -- a list that would rot the first time someone
-      # adds a test.
-      - uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
+      - uses: Vampire/setup-wsl@d1da7f2c0322a5ee4f24975344f67fc0f5baf364 # v7.0.0
         with:
-          tool: similarity-rs
-      - run: cargo build --all-targets
-      - run: cargo test --all-targets
+          distribution: Ubuntu-24.04
+          additional-packages: curl build-essential git
+      # Deliberately the same two recipes a person runs, not equivalents. The
+      # point is that `just setup` picks our toolchain rather than whatever
+      # the inherited Windows PATH offers first.
+      - name: The task runner works under WSL
+        shell: wsl-bash {0}
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --profile minimal --no-modify-path
+          . "$HOME/.cargo/env"
+          cargo install just --locked
+          just setup
+          just check
 
   # rust-toolchain.toml pins one version, so nothing else ever proves the crate
   # still builds on the oldest version it claims.

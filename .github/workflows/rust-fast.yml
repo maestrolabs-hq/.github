@@ -61,6 +61,43 @@ jobs:
           DUPLICATION_TEST: ${{ inputs.duplication-test }}
         run: cargo test --test "$DUPLICATION_TEST"
 
+  # The only place the cfg(not(unix)) branches are ever compiled, and the only
+  # gate that reads a path separator on a machine that does not use `/`.
+  #
+  # This sat in the heavy tier until the estate measured itself. The reason
+  # written down was that blocking a merge on a thirty-minute matrix teaches a
+  # team to bypass its own gates -- sound, but the matrix is not thirty
+  # minutes. The fast tier finishes in twenty-four seconds, and Actions
+  # minutes are unmetered on the public runners every repository here uses.
+  # The cost the decision avoided does not exist, and the cost it accepted --
+  # a Windows break merging green and surfacing the following Monday, in a run
+  # nobody is required to read -- turned out to be the expensive one.
+  #
+  # Each matrix leg reports its own context, so the failure names the platform
+  # before anyone opens it. Adding an operating system therefore adds a
+  # required context, and the ruleset changes with it.
+  cross-platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The policy gates run here too, and one of them shells out. They can
+      # only give the same answer on every platform, but installing the tool
+      # is cheaper than maintaining a list of which test targets are
+      # platform-dependent -- a list that would rot the first time someone
+      # adds a test.
+      - uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
+        with:
+          tool: similarity-rs
+      - run: cargo build --all-targets
+      - run: cargo test --all-targets
+
   # Licences, advisories, banned crates and sources. `machete` is here too: an
   # unused dependency is a supply-chain surface nobody is watching.
   rust-audit:

@@ -200,6 +200,49 @@ jobs:
           # shellcheck disable=SC2086
           taplo fmt --config .shared-policy/taplo.toml --check --diff $files
 
+  # The rule three repositories claimed and none enforced.
+  #
+  # AGENTS.md said "no absolute paths anywhere -- a test fails on this", and
+  # CONTRIBUTING said both prose rules were mechanical. Only the English one
+  # was. The path rule was a sentence for as long as anyone had been reading
+  # it, which is the specific way a documented gate rots: it is quoted in
+  # reviews, believed, and never run.
+  #
+  # What it looks for is a path anchored to one person's machine, because that
+  # is the failure maestro-core ADR-0001 records -- a path that works where it
+  # was authored and nowhere else.
+  #
+  # Deliberately not flagged: /usr, /opt, /etc, /var, /tmp. Those name a
+  # platform convention rather than a machine, they appear in shebangs and in
+  # install steps that are correct, and a gate that fails on `#!/bin/sh`
+  # teaches people to skip it.
+  #
+  # This file is excluded because it contains the patterns themselves, the
+  # same reason the prose gate excludes prose-rules.txt.
+  no-absolute-paths:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: No path names one machine
+        run: |
+          set -uo pipefail
+          hits=$(git grep -nIE -- \
+            '(/home/[A-Za-z0-9._-]+|/Users/[A-Za-z0-9._-]+|/root/|[A-Za-z]:\\Users\\|%USERPROFILE%)' \
+            -- ':!config/' ':!*.lock' ':!.github/workflows/common-fast.yml' || true)
+          if [ -n "$hits" ]; then
+            echo "::error::these paths are anchored to one machine"
+            printf '%s\n' "$hits" | sed 's|^|    |'
+            echo
+            echo "Derive the path at run time instead: the home directory from"
+            echo "the environment, the repository root from the working directory."
+            echo "In a test, use a synthetic root such as /somewhere."
+            exit 1
+          fi
+          echo "No path names one machine."
+
   # The workflows are code with access to the repository, so they are audited
   # too: unpinned actions, excessive permissions, injectable expressions.
   actions-security:

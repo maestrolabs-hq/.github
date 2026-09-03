@@ -114,6 +114,31 @@ jobs:
       - run: uv sync --locked
       - run: uv run pytest -q
 
+  # Path handling and the interpreter's platform branches, on the two systems
+  # ubuntu-latest cannot speak for. This was weekly evidence until the estate
+  # measured its own tiers and found the thirty-minute matrix that justified
+  # non-blocking did not exist; see rust-fast.yml, where the same move is
+  # written down at length.
+  #
+  # Each matrix leg reports its own context, so a failure names the platform
+  # before anyone opens it.
+  cross-platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ inputs.uv-version }}
+      - run: uv sync --locked
+      - run: uv run pytest -q
+
   py-audit:
     runs-on: ubuntu-latest
     timeout-minutes: 10
